@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pulse Wallet — ConnectWallet (proton-web-sdk style)</title>
+  <style>
+    :root { color-scheme: dark; --navy:#0B1437; --accent:#4F7CFF; --glow:#8B95FF; --ok:#3DD68C; --warn:#F5A524; }
+    body { margin:0; font:15px/1.5 -apple-system,system-ui,sans-serif; color:#e8ecff;
+           background:radial-gradient(1200px 600px at 50% -10%, #16224f, var(--navy)); min-height:100vh; }
+    .wrap { max-width:720px; margin:0 auto; padding:44px 20px 80px; }
+    h1 { font-size:24px; margin:0 0 4px; } .sub { color:#9fb0e0; margin:0 0 22px; }
+    .card { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10);
+            border-radius:16px; padding:20px; margin:14px 0; }
+    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+    label { font-size:12px; color:#9fb0e0; display:block; margin:10px 0 4px; }
+    input { width:100%; box-sizing:border-box; background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.12);
+            border-radius:10px; color:#e8ecff; padding:10px; font:13px ui-monospace,monospace; }
+    button { background:linear-gradient(135deg,var(--accent),var(--glow)); color:#fff; border:0;
+             border-radius:12px; padding:11px 18px; font-weight:600; cursor:pointer; }
+    button.ghost { background:rgba(255,255,255,.08); } button:disabled{opacity:.5}
+    .mono { font:12px ui-monospace,monospace; color:#9fb0e0; word-break:break-all; }
+    .ok{color:var(--ok)} .warn{color:var(--warn)} code{background:rgba(0,0,0,.3);padding:2px 6px;border-radius:6px}
+    .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .pill{ font-size:11px; background:rgba(79,124,255,.18); color:#bcd0ff; padding:3px 8px; border-radius:99px; }
+  </style>
+</head>
+<body>
+  <div id="cb" style="display:none; background:#13325f; padding:14px 20px; text-align:center; font-weight:600;">
+    ✓ Returned from the wallet — you can close this tab.
+  </div>
+  <div class="wrap">
+    <h1>⚡ ConnectWallet <span class="pill">proton-web-sdk style</span></h1>
+    <p class="sub">Same shape as <code>@proton/web-sdk</code>, but the selector features
+       <b>Pulse Wallet (Desktop)</b>. Compare with the low-level <a href="index.html" style="color:#8ab4ff">demo →</a></p>
+
+    <div class="card">
+      <label>RPC endpoint</label>
+      <input id="rpc" value="https://rpc.a-chain-testnet.protonnz.com" />
+    </div>
+
+    <div class="card">
+      <div class="row"><strong>Session</strong>
+        <span><button id="connect" onclick="connect()">Connect Wallet</button>
+        <button id="logout" class="ghost" style="display:none" onclick="logout()">Logout</button></span>
+      </div>
+      <div id="who" class="mono" style="margin-top:10px">No session.</div>
+    </div>
+
+    <div class="card">
+      <strong>session.transact({ actions: [transfer] })</strong>
+      <div class="grid">
+        <div><label>To</label><input id="to" value="pulse" /></div>
+        <div><label>Quantity</label><input id="qty" value="0.0001 XPR" /></div>
+        <div><label>Token contract</label><input id="contract" value="pulse.token" /></div>
+        <div><label>Memo</label><input id="memo" value="connectwallet demo" /></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="tx" onclick="transact()" disabled>Transact</button>
+        <span id="txmsg" class="mono"></span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // ── Inlined @pulsevm/pulse-web-sdk (ConnectWallet API) ──────────────────
+    const $ = id => document.getElementById(id);
+    const here = () => location.origin + location.pathname;
+    const loginURL = cb => `pulsevm://login?callback=${encodeURIComponent(cb)}`;
+    const signURL = ({chainId,packedTrx,summary,callback}) => {
+      const q = new URLSearchParams({chain_id:chainId,packed_trx:packedTrx,callback});
+      if (summary) q.set("summary", summary); return `pulsevm://sign?${q}`;
+    };
+    function triggerScheme(url){ const f=document.createElement("iframe"); f.style.display="none"; f.src=url; document.body.appendChild(f); setTimeout(()=>f.remove(),1500); }
+    function awaitResult(key, ms=120000){ return new Promise((res,rej)=>{
+      const chk=()=>{ const v=localStorage.getItem(key); if(v){cleanup();localStorage.removeItem(key);res(JSON.parse(v));} };
+      const onS=e=>{ if(e.key===key) chk(); }; const poll=setInterval(chk,400);
+      const t=setTimeout(()=>{cleanup();rej(new Error("Wallet request timed out"));},ms);
+      function cleanup(){clearInterval(poll);clearTimeout(t);removeEventListener("storage",onS);}
+      addEventListener("storage",onS); chk();
+    }); }
+    function handleCallback(){ const p=new URLSearchParams(location.search);
+      if(p.get("account")){ localStorage.setItem("pulse.cb.login",JSON.stringify({account:p.get("account")||"",key:p.get("key")||""})); return true; }
+      if(p.get("signature")){ const rid=p.get("rid")||"default"; localStorage.setItem("pulse.cb.sign."+rid,JSON.stringify({signature:p.get("signature")||""})); return true; }
+      return false; }
+
+    // serializer + rpc
+    const te=new TextEncoder();
+    async function rpc(ep,m,p={}){ const r=await fetch(ep,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:1,method:m,params:p})}); const j=await r.json(); if(j.error) throw new Error(j.error.data||j.error.message); return j.result; }
+    function cv(c){ if(c>=97&&c<=122)return BigInt(c-97+6); if(c>=49&&c<=53)return BigInt(c-49+1); return 0n; }
+    function nameU64(s){ let v=0n; for(let i=0;i<13;i++){ const c=i<s.length?cv(s.charCodeAt(i)):0n; if(i<12)v|=(c&0x1fn)<<(64n-5n*BigInt(i+1)); else v|=c&0x0fn; } return v&((1n<<64n)-1n); }
+    function u64(v){const b=[];let x=v;for(let i=0;i<8;i++){b.push(Number(x&0xffn));x>>=8n;}return b;}
+    function u32(v){const b=[];let x=v>>>0;for(let i=0;i<4;i++){b.push(x&0xff);x=Math.floor(x/256);}return b;}
+    function u16(v){return [v&0xff,(v>>8)&0xff];}
+    function vu(v){const o=[];let x=v>>>0;do{let b=x&0x7f;x=Math.floor(x/128);if(x)b|=0x80;o.push(b);}while(x);return o;}
+    function asset(q){const[a,s]=q.trim().split(/\s+/);const d=a.indexOf(".");const p=d<0?0:a.length-d-1;const o=[...u64(BigInt(a.replace(".","" ))),p];const sb=te.encode(s);for(let i=0;i<7;i++)o.push(i<sb.length?sb[i]:0);return o;}
+    function hx(a){return a.map(b=>b.toString(16).padStart(2,"0")).join("");}
+    async function packTransfer(ep,act){ const d=act.data,au=act.authorization[0];
+      const info=await rpc(ep,"pulsevm.getInfo"); const ib=info.head_block_id.match(/../g).map(h=>parseInt(h,16));
+      const pre=(ib[8]|(ib[9]<<8)|(ib[10]<<16)|(ib[11]<<24))>>>0; const m=te.encode(d.memo||"");
+      const data=[...u64(nameU64(d.from)),...u64(nameU64(d.to)),...asset(d.quantity),...vu(m.length),...m];
+      const tx=[...u32(Math.floor(Date.now()/1000)+120),...u16(info.head_block_num&0xffff),...u32(pre),
+        ...vu(0),0,...vu(0),...vu(0),...vu(1),...u64(nameU64(act.account)),...u64(nameU64(act.name)),
+        ...vu(1),...u64(nameU64(au.actor)),...u64(nameU64(au.permission)),...vu(data.length),...data,...vu(0)];
+      return hx(tx); }
+
+    function showSelector(appName){ return new Promise((resolve,reject)=>{
+      const o=document.createElement("div");
+      o.style.cssText="position:fixed;inset:0;background:rgba(4,8,24,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999";
+      o.innerHTML=`<div style="width:340px;background:#0B1437;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:22px">
+        <div style="font-weight:700;font-size:18px">Connect a wallet</div><div style="color:#9fb0e0;font-size:13px;margin-bottom:16px">to ${appName}</div>
+        <button id="o1" style="width:100%;display:flex;gap:12px;align-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px;color:#e8ecff;text-align:left">
+          <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4F7CFF,#8B95FF);display:flex;align-items:center;justify-content:center">⚡</div>
+          <div><div style="font-weight:600">Pulse Wallet</div><div style="color:#9fb0e0;font-size:12px">Desktop · Touch ID</div></div></button>
+        <button id="o2" style="width:100%;margin-top:10px;background:none;border:0;color:#9fb0e0;padding:8px">Cancel</button></div>`;
+      document.body.appendChild(o);
+      o.querySelector("#o1").onclick=()=>{o.remove();resolve();};
+      o.querySelector("#o2").onclick=()=>{o.remove();reject(new Error("cancelled"));};
+    }); }
+
+    const SK="pulse.session";
+    async function ConnectWallet(opts){
+      const saved=localStorage.getItem(SK); if(saved) return mkSession(JSON.parse(saved),opts);
+      await showSelector(opts.appName);
+      triggerScheme(loginURL(here()));
+      const r=await awaitResult("pulse.cb.login");
+      const s={actor:r.account,permission:"active",publicKey:r.key};
+      localStorage.setItem(SK,JSON.stringify(s)); return mkSession(s,opts);
+    }
+    function mkSession(s,opts){ return { ...s,
+      logout(){ localStorage.removeItem(SK); },
+      async transact({actions},o={}){ const packed=await packTransfer(opts.rpcEndpoint,actions[0]);
+        const rid=Math.random().toString(36).slice(2); const cb=`${here()}?rid=${rid}`; const d=actions[0].data;
+        triggerScheme(signURL({chainId:opts.chainId,packedTrx:packed,summary:`Transfer ${d.quantity} to ${d.to}`,callback:cb}));
+        const res=await awaitResult("pulse.cb.sign."+rid); const out={signature:res.signature,packedTrx:packed};
+        if(o.broadcast!==false){ const r=await rpc(opts.rpcEndpoint,"pulsevm.issueTx",{signatures:[res.signature],compression:"none",packed_context_free_data:"",packed_trx:packed});
+          out.transactionId=typeof r==="string"?r:(r&&(r.transaction_id||r.id)); } return out; }
+    }; }
+
+    // ── demo glue ───────────────────────────────────────────────────────────
+    let session=null;
+    let opts=()=>({appName:"ConnectWallet Demo",chainId:"",rpcEndpoint:$("rpc").value.trim()});
+    async function chainId(){ const i=await rpc($("rpc").value.trim(),"pulsevm.getInfo"); return i.chain_id; }
+
+    window.connect=async()=>{ try{
+      const o={...opts(), chainId: await chainId()};
+      session=await ConnectWallet(o); session._opts=o; renderSession();
+    }catch(e){ if(e.message!=="cancelled") $("who").innerHTML=`<span class="warn">${e.message}</span>`; } };
+    window.logout=()=>{ session?.logout(); session=null; renderSession(); };
+    window.transact=async()=>{ if(!session) return; $("txmsg").textContent="signing…";
+      try{ const res=await session.transact({actions:[{account:$("contract").value.trim(),name:"transfer",
+        authorization:[{actor:session.actor,permission:session.permission}],
+        data:{from:session.actor,to:$("to").value.trim(),quantity:$("qty").value.trim(),memo:$("memo").value.trim()}}]});
+        $("txmsg").innerHTML=`<span class="ok">${res.transactionId?("tx "+res.transactionId):"signed"}</span>`;
+      }catch(e){ $("txmsg").innerHTML=`<span class="warn">${e.message}</span>`; } };
+
+    function renderSession(){ if(session){ $("who").innerHTML=`<span class="ok">Connected:</span> ${session.actor}<br>${session.publicKey}`;
+      $("connect").style.display="none"; $("logout").style.display=""; $("tx").disabled=false; }
+      else { $("who").textContent="No session."; $("connect").style.display=""; $("logout").style.display="none"; $("tx").disabled=true; } }
+
+    // on load: if this tab is a wallet callback, stash + show banner; else restore session
+    if(handleCallback()){ $("cb").style.display="block"; history.replaceState({},"",here()); }
+    const saved=localStorage.getItem(SK);
+    if(saved){ const s=JSON.parse(saved); chainId().then(cid=>{ session=mkSession(s,{...opts(),chainId:cid}); renderSession(); }).catch(()=>{ session=mkSession(s,opts()); renderSession(); }); }
+  </script>
+</body>
+</html>
