@@ -44,7 +44,7 @@
     <div class="card">
       <div class="row" style="justify-content:space-between">
         <strong>1. Connect wallet</strong>
-        <button onclick="connect()">Connect Wallet</button>
+        <button id="connectBtn" onclick="toggleConnect()">Connect Wallet</button>
       </div>
       <div id="acct" class="mono" style="margin-top:10px">Not connected.</div>
     </div>
@@ -88,6 +88,25 @@
       return `pulsevm://sign?${q.toString()}`;
     }
     window.connect = () => { location.href = loginURL(here()); };
+    window.toggleConnect = () => {
+      if (localStorage.getItem("pw_account")) {   // disconnect
+        localStorage.removeItem("pw_account"); localStorage.removeItem("pw_key");
+        renderConnection();
+      } else connect();
+    };
+    function renderConnection() {
+      const a = localStorage.getItem("pw_account"), k = localStorage.getItem("pw_key") || "";
+      if (a) {
+        $("acct").innerHTML = `<span class="ok">Connected:</span> ${a}<br>${k}`;
+        $("connectBtn").textContent = "Disconnect";
+        $("connectBtn").classList.add("ghost");
+        if (!$("from").value) $("from").value = a;
+      } else {
+        $("acct").textContent = "Not connected.";
+        $("connectBtn").textContent = "Connect Wallet";
+        $("connectBtn").classList.remove("ghost");
+      }
+    }
 
     // ---- minimal Antelope serializer (mirrors the Rust core) ----
     const te = new TextEncoder();
@@ -162,12 +181,18 @@
 
     // ---- handle wallet callbacks ----
     const p=new URLSearchParams(location.search);
-    if(p.get("account")) $("acct").innerHTML=`<span class="ok">Connected:</span> ${p.get("account")}<br>${p.get("key")||""}`;
+    if(p.get("account")){
+      localStorage.setItem("pw_account", p.get("account"));
+      localStorage.setItem("pw_key", p.get("key")||"");
+    }
+    renderConnection();
     if(p.get("signature")){
       localStorage.setItem("pw_sig",p.get("signature"));
       $("sig").innerHTML=`<span class="ok">Signature:</span><br>${p.get("signature")}`;
       $("bcast").disabled=false; $("bmsg").textContent="Ready to broadcast.";
     }
+    // Clean the callback params out of the URL so a refresh doesn't re-apply them.
+    if (p.get("account") || p.get("signature")) history.replaceState({}, "", here());
     refreshInfo();
   </script>
 </body>
