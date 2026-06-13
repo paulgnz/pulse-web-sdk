@@ -78,7 +78,9 @@ function awaitResult(key: string, timeoutMs = 120_000): Promise<Record<string, s
 export function handleCallback(): boolean {
   const p = new URLSearchParams(location.search);
   if (p.get("account")) {
-    localStorage.setItem("pulse.cb.login", JSON.stringify({ account: p.get("account") || "", key: p.get("key") || "" }));
+    localStorage.setItem("pulse.cb.login", JSON.stringify({
+      account: p.get("account") || "", permission: p.get("permission") || "active", key: p.get("key") || "",
+    }));
     return true;
   }
   if (p.get("signature")) {
@@ -222,7 +224,7 @@ export async function ConnectWallet(opts: ConnectOptions): Promise<{ session: Pu
   await showSelector(opts.appName);
   triggerScheme(loginURL(here()));
   const res = await awaitResult("pulse.cb.login");
-  const s = { actor: res.account, permission: "active", publicKey: res.key };
+  const s = { actor: res.account, permission: res.permission || "active", publicKey: res.key };
   localStorage.setItem(SESSION_KEY, JSON.stringify(s));
   return { session: makeSession(s, opts) };
 }

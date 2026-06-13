@@ -80,7 +80,7 @@
       addEventListener("storage",onS); chk();
     }); }
     function handleCallback(){ const p=new URLSearchParams(location.search);
-      if(p.get("account")){ localStorage.setItem("pulse.cb.login",JSON.stringify({account:p.get("account")||"",key:p.get("key")||""})); return true; }
+      if(p.get("account")){ localStorage.setItem("pulse.cb.login",JSON.stringify({account:p.get("account")||"",permission:p.get("permission")||"active",key:p.get("key")||""})); return true; }
       if(p.get("signature")){ const rid=p.get("rid")||"default"; localStorage.setItem("pulse.cb.sign."+rid,JSON.stringify({signature:p.get("signature")||""})); return true; }
       return false; }
 
@@ -137,7 +137,7 @@
       await showSelector(opts.appName);
       triggerScheme(loginURL(here()));
       const r=await awaitResult("pulse.cb.login");
-      const s={actor:r.account,permission:"active",publicKey:r.key};
+      const s={actor:r.account,permission:r.permission||"active",publicKey:r.key};
       localStorage.setItem(SK,JSON.stringify(s)); return mkSession(s,opts);
     }
     function mkSession(s,opts){ return { ...s,
