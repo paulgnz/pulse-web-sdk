@@ -19,7 +19,41 @@ cross-device phone→desktop can be added later behind the same API.)
 npm i @pulsevm/pulse-web-sdk
 ```
 
-## Login
+## ConnectWallet (proton-web-sdk-style)
+
+The high-level API mirrors `@proton/web-sdk`, but the wallet selector features
+**Pulse Wallet (Desktop)** instead of Anchor/WebAuth. It shows a connect modal,
+logs in over `pulsevm://`, restores sessions, and gives you `session.transact()`.
+
+```ts
+import { ConnectWallet } from "@pulsevm/pulse-web-sdk";
+
+const { session } = await ConnectWallet({
+  appName: "My Dapp",
+  chainId: "0d6f033e887fae475d641104b6e87762b6c869e87a101afeeb64d608ab376618",
+  rpcEndpoint: "https://rpc.a-chain-testnet.protonnz.com",
+});
+
+// session.actor / session.permission / session.publicKey
+const res = await session.transact({
+  actions: [{
+    account: "pulse.token",
+    name: "transfer",
+    authorization: [{ actor: session.actor, permission: session.permission }],
+    data: { from: session.actor, to: "treasury.nz", quantity: "1.0000 XPR", memo: "" },
+  }],
+}, { broadcast: true });
+// → { transactionId, signature, packedTrx }
+
+session.logout();
+```
+
+The transport triggers `pulsevm://` via a hidden iframe (the dapp page stays put)
+and resolves the Promise when the wallet returns to your page — call
+`handleCallback()` once at load so a returning tab hands the result back.
+Serialization currently covers `transfer`; use `pulsevm-js` for arbitrary actions.
+
+## Low-level (Login / Sign URLs)
 
 ```ts
 import { PulseWalletLink, parseCallback } from "@pulsevm/pulse-web-sdk";
