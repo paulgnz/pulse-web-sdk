@@ -154,23 +154,32 @@ async function packTransfer(endpoint: string, action: PulseAction): Promise<stri
 
 // ─────────────────────────────────────────── selector modal
 
-function showSelector(appName: string): Promise<void> {
+/// proton-web-sdk-style wallet selector — clean light card, wallet rows, footer.
+function showSelector(_appName: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const overlay = document.createElement("div");
-    overlay.style.cssText = "position:fixed;inset:0;background:rgba(4,8,24,.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:99999;font:15px/1.5 -apple-system,system-ui,sans-serif";
-    overlay.innerHTML = `
-      <div style="width:360px;background:#0B1437;border:1px solid rgba(255,255,255,.12);border-radius:18px;padding:22px;color:#e8ecff">
-        <div style="font-weight:700;font-size:18px;margin-bottom:2px">Connect a wallet</div>
-        <div style="color:#9fb0e0;font-size:13px;margin-bottom:16px">to ${appName}</div>
-        <button id="pw-opt" style="width:100%;display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:14px;color:#e8ecff;cursor:pointer;text-align:left">
-          <div style="width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#4F7CFF,#8B95FF);display:flex;align-items:center;justify-content:center;font-size:18px">⚡</div>
-          <div><div style="font-weight:600">Pulse Wallet</div><div style="color:#9fb0e0;font-size:12px">Desktop · Touch ID</div></div>
-        </button>
-        <button id="pw-cancel" style="width:100%;margin-top:10px;background:none;border:0;color:#9fb0e0;cursor:pointer;padding:8px">Cancel</button>
+    const o = document.createElement("div");
+    o.style.cssText = "position:fixed;inset:0;background:rgba(10,20,50,.45);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:99999;font-family:-apple-system,system-ui,sans-serif";
+    o.innerHTML = `
+      <div style="width:380px;background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.4)">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #eef0f6">
+          <div style="font-weight:700;font-size:17px;color:#0B1437">Connect Wallet</div>
+          <button id="pw-x" style="background:none;border:0;font-size:20px;color:#98a2b8;cursor:pointer;line-height:1">×</button>
+        </div>
+        <div style="padding:14px">
+          <button id="pw-opt" style="width:100%;display:flex;gap:13px;align-items:center;background:#fff;border:1px solid #e7eaf3;border-radius:14px;padding:14px;cursor:pointer;text-align:left"
+            onmouseover="this.style.background='#f6f8ff';this.style.borderColor='#cdd8f7'" onmouseout="this.style.background='#fff';this.style.borderColor='#e7eaf3'">
+            <div style="width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#4F7CFF,#8B95FF);display:flex;align-items:center;justify-content:center;font-size:20px">⚡</div>
+            <div style="flex:1"><div style="font-weight:650;color:#0B1437;font-size:15px">PulseVM Wallet</div><div style="color:#8a93a8;font-size:12.5px">Desktop · Secure Enclave / Touch ID</div></div>
+            <div style="color:#c2cae0;font-size:18px">›</div>
+          </button>
+        </div>
+        <div style="padding:12px 20px 18px;text-align:center;color:#9aa3b8;font-size:12px;border-top:1px solid #eef0f6">Powered by <b style="color:#4F7CFF">PulseVM</b></div>
       </div>`;
-    document.body.appendChild(overlay);
-    overlay.querySelector<HTMLButtonElement>("#pw-opt")!.onclick = () => { overlay.remove(); resolve(); };
-    overlay.querySelector<HTMLButtonElement>("#pw-cancel")!.onclick = () => { overlay.remove(); reject(new Error("User cancelled")); };
+    document.body.appendChild(o);
+    const done = (ok: boolean) => { o.remove(); ok ? resolve() : reject(new Error("User cancelled")); };
+    o.querySelector<HTMLButtonElement>("#pw-opt")!.onclick = () => done(true);
+    o.querySelector<HTMLButtonElement>("#pw-x")!.onclick = () => done(false);
+    o.onclick = (e) => { if (e.target === o) done(false); };
   });
 }
 
