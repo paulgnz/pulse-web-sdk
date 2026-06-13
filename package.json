@@ -1,0 +1,18 @@
+{
+  "name": "@pulsevm/pulse-web-sdk",
+  "version": "0.0.1",
+  "description": "Connect web dapps to the Pulse Wallet (Desktop) via the pulsevm:// URL scheme.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": ["pulsevm", "wallet", "antelope", "signing", "desktop"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  }
+}
