@@ -3,39 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pulse Wallet — Connect & Sign demo</title>
+  <title>Pulse Wallet — Connect, Sign & Broadcast demo</title>
   <style>
-    :root { color-scheme: dark; --navy:#0B1437; --accent:#4F7CFF; --glow:#8B95FF; --ok:#3DD68C; }
+    :root { color-scheme: dark; --navy:#0B1437; --accent:#4F7CFF; --glow:#8B95FF; --ok:#3DD68C; --warn:#F5A524; }
     body { margin:0; font:15px/1.5 -apple-system,system-ui,sans-serif; color:#e8ecff;
            background:radial-gradient(1200px 600px at 50% -10%, #16224f, var(--navy)); min-height:100vh; }
-    .wrap { max-width:720px; margin:0 auto; padding:48px 20px; }
-    h1 { font-size:28px; margin:0 0 4px; }
-    .sub { color:#9fb0e0; margin:0 0 28px; }
+    .wrap { max-width:760px; margin:0 auto; padding:44px 20px 80px; }
+    h1 { font-size:26px; margin:0 0 4px; } .sub { color:#9fb0e0; margin:0 0 24px; }
     .card { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10);
-            border-radius:16px; padding:20px; margin:14px 0; backdrop-filter:blur(8px); }
-    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+            border-radius:16px; padding:20px; margin:14px 0; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
     label { font-size:12px; color:#9fb0e0; display:block; margin:10px 0 4px; }
-    input, textarea { width:100%; box-sizing:border-box; background:rgba(0,0,0,.25);
-            border:1px solid rgba(255,255,255,.12); border-radius:10px; color:#e8ecff;
-            padding:10px; font:13px ui-monospace,monospace; }
-    textarea { min-height:84px; resize:vertical; }
+    input { width:100%; box-sizing:border-box; background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.12);
+            border-radius:10px; color:#e8ecff; padding:10px; font:13px ui-monospace,monospace; }
     button { background:linear-gradient(135deg,var(--accent),var(--glow)); color:#fff; border:0;
              border-radius:12px; padding:11px 18px; font-weight:600; cursor:pointer; }
-    button.ghost { background:rgba(255,255,255,.08); }
+    button.ghost { background:rgba(255,255,255,.08); } button:disabled{ opacity:.5; cursor:default; }
     .mono { font:12px ui-monospace,monospace; color:#9fb0e0; word-break:break-all; }
-    .ok { color:var(--ok); }
-    code { background:rgba(0,0,0,.3); padding:2px 6px; border-radius:6px; }
-    pre { background:rgba(0,0,0,.3); padding:12px; border-radius:10px; overflow:auto; font-size:12px; }
+    .ok{color:var(--ok)} .warn{color:var(--warn)} code{background:rgba(0,0,0,.3);padding:2px 6px;border-radius:6px}
+    .grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>⚡ Pulse Wallet — Connect &amp; Sign</h1>
-    <p class="sub">Demo of <code>pulse-web-sdk</code> + the <code>pulsevm://</code> desktop transport.
-       Serve this over http (<code>python3 -m http.server</code>) so the callback URL works.</p>
+    <h1>⚡ Pulse Wallet — live demo</h1>
+    <p class="sub">Connect, build a transfer, sign it in the desktop wallet over <code>pulsevm://</code>, and broadcast.
+       Serve over http (<code>python3 -m http.server</code>) and run the wallet once so macOS registers the scheme.</p>
 
     <div class="card">
-      <div class="row">
+      <label>RPC endpoint</label>
+      <input id="rpc" value="https://rpc.a-chain-testnet.protonnz.com" />
+      <div id="chaininfo" class="mono" style="margin-top:8px">—</div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
         <strong>1. Connect wallet</strong>
         <button onclick="connect()">Connect Wallet</button>
       </div>
@@ -43,57 +45,124 @@
     </div>
 
     <div class="card">
-      <strong>2. Sign a transaction</strong>
-      <label>Chain id</label>
-      <input id="chain" value="0d6f033e887fae475d641104b6e87762b6c869e87a101afeeb64d608ab376618" />
-      <label>packed_trx (hex) — serialize with <code>pulsevm-js</code>, or copy from the wallet</label>
-      <textarea id="packed" placeholder="00a1b2…"></textarea>
-      <label>Summary (shown in the wallet)</label>
-      <input id="summary" value="Transfer 1.0000 XPR to treasury.nz" />
-      <div style="margin-top:12px"><button onclick="sign()">Sign with Pulse Wallet</button></div>
+      <strong>2. Build &amp; sign a transfer</strong>
+      <div class="grid">
+        <div><label>From (your account)</label><input id="from" placeholder="protonnz" /></div>
+        <div><label>To</label><input id="to" value="pulse" /></div>
+        <div><label>Amount</label><input id="amount" value="0.0001" /></div>
+        <div><label>Symbol</label><input id="symbol" value="XPR" /></div>
+        <div><label>Token contract</label><input id="contract" value="pulse.token" /></div>
+        <div><label>Memo</label><input id="memo" value="pulse-web-sdk demo" /></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button onclick="buildAndSign()">Build &amp; Sign</button>
+        <span id="buildmsg" class="mono"></span>
+      </div>
       <div id="sig" class="mono" style="margin-top:10px"></div>
     </div>
 
     <div class="card">
-      <strong>3. Broadcast</strong>
-      <p class="sub" style="margin:8px 0">Submit the signed tx via <code>pulsevm.issueTx</code>:</p>
-      <pre id="broadcast">{ "jsonrpc":"2.0","id":1,"method":"pulsevm.issueTx","params":{
-  "signatures":[ "&lt;SIG_…&gt;" ], "compression":"none",
-  "packed_context_free_data":"", "packed_trx":"&lt;packed_trx&gt;" } }</pre>
+      <div class="row" style="justify-content:space-between">
+        <strong>3. Broadcast</strong>
+        <button id="bcast" onclick="broadcast()" disabled>Broadcast</button>
+      </div>
+      <div id="bmsg" class="mono" style="margin-top:10px">Sign a transaction first.</div>
     </div>
   </div>
 
   <script type="module">
-    // Inlined from pulse-web-sdk (zero-dependency transport).
-    const SCHEME = "pulsevm";
+    const $ = id => document.getElementById(id);
     const here = () => location.origin + location.pathname;
-    function loginURL(cb){ return `${SCHEME}://login?callback=${encodeURIComponent(cb)}`; }
-    function signURL({chainId, packedTrx, summary, callback}){
-      const q = new URLSearchParams({ chain_id: chainId, packed_trx: packedTrx, callback });
-      if (summary) q.set("summary", summary);
-      return `${SCHEME}://sign?${q.toString()}`;
+    const rpc = () => $("rpc").value.trim();
+
+    // ---- pulse-web-sdk transport (inlined) ----
+    function loginURL(cb){ return `pulsevm://login?callback=${encodeURIComponent(cb)}`; }
+    function signURL({chainId,packedTrx,summary,callback}){
+      const q=new URLSearchParams({chain_id:chainId,packed_trx:packedTrx,callback}); if(summary)q.set("summary",summary);
+      return `pulsevm://sign?${q.toString()}`;
+    }
+    window.connect = () => { location.href = loginURL(here()); };
+
+    // ---- minimal Antelope serializer (mirrors the Rust core) ----
+    const te = new TextEncoder();
+    function charVal(c){ if(c>=97&&c<=122)return BigInt(c-97+6); if(c>=49&&c<=53)return BigInt(c-49+1); return 0n; }
+    function nameToU64(s){ let v=0n; for(let i=0;i<13;i++){ const c=i<s.length?charVal(s.charCodeAt(i)):0n;
+      if(i<12) v|=(c&0x1fn)<<(64n-5n*BigInt(i+1)); else v|=c&0x0fn; } return v & ((1n<<64n)-1n); }
+    function u64le(v){ const b=[]; let x=BigInt(v); for(let i=0;i<8;i++){ b.push(Number(x&0xffn)); x>>=8n; } return b; }
+    function u32le(v){ const b=[]; let x=v>>>0; for(let i=0;i<4;i++){ b.push(x&0xff); x=Math.floor(x/256);} return b; }
+    function u16le(v){ return [v&0xff,(v>>8)&0xff]; }
+    function varu(v){ const o=[]; let x=v>>>0; do{ let b=x&0x7f; x=Math.floor(x/128); if(x)b|=0x80; o.push(b);}while(x); return o; }
+    function asset(qty){ const [amt,sym]=qty.trim().split(/\s+/); const dot=amt.indexOf(".");
+      const prec=dot<0?0:amt.length-dot-1; const amount=BigInt(amt.replace(".","")); const o=[...u64le(amount),prec];
+      const sb=te.encode(sym); for(let i=0;i<7;i++)o.push(i<sb.length?sb[i]:0); return o; }
+    function transferData(from,to,qty,memo){ const m=te.encode(memo);
+      return [...u64le(nameToU64(from)),...u64le(nameToU64(to)),...asset(qty),...varu(m.length),...m]; }
+    function hex(arr){ return arr.map(b=>b.toString(16).padStart(2,"0")).join(""); }
+    function buildTransferTx(p){
+      const data=transferData(p.from,p.to,p.quantity,p.memo);
+      const t=[...u32le(p.expiration),...u16le(p.refBlockNum),...u32le(p.refBlockPrefix),
+        ...varu(0),0,...varu(0), ...varu(0), ...varu(1),
+        ...u64le(nameToU64(p.contract)),...u64le(nameToU64("transfer")),
+        ...varu(1),...u64le(nameToU64(p.actor)),...u64le(nameToU64(p.permission)),
+        ...varu(data.length),...data, ...varu(0)];
+      return hex(t);
     }
 
-    window.connect = () => { location.href = loginURL(here()); };
-    window.sign = () => {
-      location.href = signURL({
-        chainId: document.getElementById("chain").value.trim(),
-        packedTrx: document.getElementById("packed").value.trim(),
-        summary: document.getElementById("summary").value.trim(),
-        callback: here(),
-      });
+    async function call(method,params={}){
+      const r=await fetch(rpc(),{method:"POST",headers:{"content-type":"application/json"},
+        body:JSON.stringify({jsonrpc:"2.0",id:1,method,params})});
+      const j=await r.json(); if(j.error) throw new Error(j.error.data||j.error.message); return j.result;
+    }
+
+    async function refreshInfo(){
+      try{ const i=await call("pulsevm.getInfo"); $("chaininfo").innerHTML=
+        `chain ${i.chain_id.slice(0,12)}… · head ${i.head_block_num} · v${i.server_version}`; return i; }
+      catch(e){ $("chaininfo").innerHTML=`<span class="warn">getInfo failed: ${e.message}</span>`; }
+    }
+
+    window.buildAndSign = async () => {
+      try{
+        $("buildmsg").textContent="building…";
+        const i=await call("pulsevm.getInfo");
+        const idBytes=i.head_block_id.match(/../g).map(h=>parseInt(h,16));
+        const refPrefix=(idBytes[8]|(idBytes[9]<<8)|(idBytes[10]<<16)|(idBytes[11]<<24))>>>0;
+        const packed=buildTransferTx({
+          from:$("from").value.trim(), to:$("to").value.trim(),
+          quantity:`${$("amount").value.trim()} ${$("symbol").value.trim()}`,
+          memo:$("memo").value.trim(), contract:$("contract").value.trim(),
+          actor:$("from").value.trim(), permission:"active",
+          refBlockNum:i.head_block_num&0xffff, refBlockPrefix:refPrefix,
+          expiration:Math.floor(Date.now()/1000)+120,
+        });
+        localStorage.setItem("pw_packed",packed);
+        localStorage.setItem("pw_chain",i.chain_id);
+        $("buildmsg").innerHTML=`<span class="ok">built ${packed.length/2}B</span> → opening wallet…`;
+        location.href=signURL({chainId:i.chain_id,packedTrx:packed,
+          summary:`Transfer ${$("amount").value} ${$("symbol").value} to ${$("to").value}`, callback:here()});
+      }catch(e){ $("buildmsg").innerHTML=`<span class="warn">${e.message}</span>`; }
     };
 
-    // Handle the wallet's callback (it appends ?account=&key= or ?signature=).
-    const p = new URLSearchParams(location.search);
-    if (p.get("account")) {
-      document.getElementById("acct").innerHTML =
-        `<span class="ok">Connected:</span> ${p.get("account")}<br>${p.get("key") || ""}`;
+    window.broadcast = async () => {
+      const sig=localStorage.getItem("pw_sig"), packed=localStorage.getItem("pw_packed");
+      if(!sig||!packed){ $("bmsg").textContent="No signed tx."; return; }
+      $("bmsg").textContent="broadcasting…";
+      try{
+        const r=await call("pulsevm.issueTx",{signatures:[sig],compression:"none",
+          packed_context_free_data:"",packed_trx:packed});
+        $("bmsg").innerHTML=`<span class="ok">submitted:</span> ${JSON.stringify(r)}`;
+      }catch(e){ $("bmsg").innerHTML=`<span class="warn">${e.message}</span><br>`+
+        `<small>If CORS/halted, broadcast via curl with signatures:["${sig}"] + packed_trx.</small>`; }
+    };
+
+    // ---- handle wallet callbacks ----
+    const p=new URLSearchParams(location.search);
+    if(p.get("account")) $("acct").innerHTML=`<span class="ok">Connected:</span> ${p.get("account")}<br>${p.get("key")||""}`;
+    if(p.get("signature")){
+      localStorage.setItem("pw_sig",p.get("signature"));
+      $("sig").innerHTML=`<span class="ok">Signature:</span><br>${p.get("signature")}`;
+      $("bcast").disabled=false; $("bmsg").textContent="Ready to broadcast.";
     }
-    if (p.get("signature")) {
-      document.getElementById("sig").innerHTML =
-        `<span class="ok">Signature:</span><br>${p.get("signature")}`;
-    }
+    refreshInfo();
   </script>
 </body>
 </html>
