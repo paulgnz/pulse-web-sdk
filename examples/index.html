@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pulse Wallet — Connect & Sign demo</title>
+  <style>
+    :root { color-scheme: dark; --navy:#0B1437; --accent:#4F7CFF; --glow:#8B95FF; --ok:#3DD68C; }
+    body { margin:0; font:15px/1.5 -apple-system,system-ui,sans-serif; color:#e8ecff;
+           background:radial-gradient(1200px 600px at 50% -10%, #16224f, var(--navy)); min-height:100vh; }
+    .wrap { max-width:720px; margin:0 auto; padding:48px 20px; }
+    h1 { font-size:28px; margin:0 0 4px; }
+    .sub { color:#9fb0e0; margin:0 0 28px; }
+    .card { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.10);
+            border-radius:16px; padding:20px; margin:14px 0; backdrop-filter:blur(8px); }
+    .row { display:flex; gap:10px; align-items:center; justify-content:space-between; }
+    label { font-size:12px; color:#9fb0e0; display:block; margin:10px 0 4px; }
+    input, textarea { width:100%; box-sizing:border-box; background:rgba(0,0,0,.25);
+            border:1px solid rgba(255,255,255,.12); border-radius:10px; color:#e8ecff;
+            padding:10px; font:13px ui-monospace,monospace; }
+    textarea { min-height:84px; resize:vertical; }
+    button { background:linear-gradient(135deg,var(--accent),var(--glow)); color:#fff; border:0;
+             border-radius:12px; padding:11px 18px; font-weight:600; cursor:pointer; }
+    button.ghost { background:rgba(255,255,255,.08); }
+    .mono { font:12px ui-monospace,monospace; color:#9fb0e0; word-break:break-all; }
+    .ok { color:var(--ok); }
+    code { background:rgba(0,0,0,.3); padding:2px 6px; border-radius:6px; }
+    pre { background:rgba(0,0,0,.3); padding:12px; border-radius:10px; overflow:auto; font-size:12px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>⚡ Pulse Wallet — Connect &amp; Sign</h1>
+    <p class="sub">Demo of <code>pulse-web-sdk</code> + the <code>pulsevm://</code> desktop transport.
+       Serve this over http (<code>python3 -m http.server</code>) so the callback URL works.</p>
+
+    <div class="card">
+      <div class="row">
+        <strong>1. Connect wallet</strong>
+        <button onclick="connect()">Connect Wallet</button>
+      </div>
+      <div id="acct" class="mono" style="margin-top:10px">Not connected.</div>
+    </div>
+
+    <div class="card">
+      <strong>2. Sign a transaction</strong>
+      <label>Chain id</label>
+      <input id="chain" value="0d6f033e887fae475d641104b6e87762b6c869e87a101afeeb64d608ab376618" />
+      <label>packed_trx (hex) — serialize with <code>pulsevm-js</code>, or copy from the wallet</label>
+      <textarea id="packed" placeholder="00a1b2…"></textarea>
+      <label>Summary (shown in the wallet)</label>
+      <input id="summary" value="Transfer 1.0000 XPR to treasury.nz" />
+      <div style="margin-top:12px"><button onclick="sign()">Sign with Pulse Wallet</button></div>
+      <div id="sig" class="mono" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <strong>3. Broadcast</strong>
+      <p class="sub" style="margin:8px 0">Submit the signed tx via <code>pulsevm.issueTx</code>:</p>
+      <pre id="broadcast">{ "jsonrpc":"2.0","id":1,"method":"pulsevm.issueTx","params":{
+  "signatures":[ "&lt;SIG_…&gt;" ], "compression":"none",
+  "packed_context_free_data":"", "packed_trx":"&lt;packed_trx&gt;" } }</pre>
+    </div>
+  </div>
+
+  <script type="module">
+    // Inlined from pulse-web-sdk (zero-dependency transport).
+    const SCHEME = "pulsevm";
+    const here = () => location.origin + location.pathname;
+    function loginURL(cb){ return `${SCHEME}://login?callback=${encodeURIComponent(cb)}`; }
+    function signURL({chainId, packedTrx, summary, callback}){
+      const q = new URLSearchParams({ chain_id: chainId, packed_trx: packedTrx, callback });
+      if (summary) q.set("summary", summary);
+      return `${SCHEME}://sign?${q.toString()}`;
+    }
+
+    window.connect = () => { location.href = loginURL(here()); };
+    window.sign = () => {
+      location.href = signURL({
+        chainId: document.getElementById("chain").value.trim(),
+        packedTrx: document.getElementById("packed").value.trim(),
+        summary: document.getElementById("summary").value.trim(),
+        callback: here(),
+      });
+    };
+
+    // Handle the wallet's callback (it appends ?account=&key= or ?signature=).
+    const p = new URLSearchParams(location.search);
+    if (p.get("account")) {
+      document.getElementById("acct").innerHTML =
+        `<span class="ok">Connected:</span> ${p.get("account")}<br>${p.get("key") || ""}`;
+    }
+    if (p.get("signature")) {
+      document.getElementById("sig").innerHTML =
+        `<span class="ok">Signature:</span><br>${p.get("signature")}`;
+    }
+  </script>
+</body>
+</html>
